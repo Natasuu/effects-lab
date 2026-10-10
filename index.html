@@ -13,6 +13,20 @@
     --line: rgba(34, 49, 78, 0.14);
     --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
+  @font-face {
+    font-family: "Uncut Sans";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("fonts/UncutSans-Regular.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Nyght Serif";
+    font-style: italic;
+    font-weight: 700;
+    font-display: swap;
+    src: url("fonts/NyghtSerif-BoldItalic.woff2") format("woff2");
+  }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body {
@@ -278,8 +292,8 @@ function layoutLogos(W, H) {
 
 function layoutHeadline(W, H) {
   const fs = Math.min(58, (W - 48) / 11.5);
-  const sans = `500 ${fs}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
-  const serif = `italic 400 ${fs * 1.08}px Georgia, "Times New Roman", serif`;
+  const sans = `400 ${fs}px "Uncut Sans", Helvetica, Arial, sans-serif`;
+  const serif = `italic 700 ${fs * 1.06}px "Nyght Serif", Georgia, serif`;
   const lines = [
     [["Helping", sans], ["bold", serif], ["startups", sans]],
     [["Ship", serif], ["with", sans], ["confidence", sans]],
@@ -3297,8 +3311,12 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-Promise.all(LOGOS.map((l) => loadImage(l.src))).then((imgs) => {
-  logoImages = imgs;
+Promise.all([
+  ...LOGOS.map((l) => loadImage(l.src)),
+  document.fonts.load('400 64px "Uncut Sans"'),
+  document.fonts.load('italic 700 64px "Nyght Serif"'),
+]).then((results) => {
+  logoImages = results.slice(0, LOGOS.length);
   rebuildAll();
   requestAnimationFrame(frame);
 });
