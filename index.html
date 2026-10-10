@@ -1983,28 +1983,36 @@ function bayerFx(c) {
     },
     enter() { cx = c.ptr.x * DPR; cy = c.ptr.y * DPR; },
     step(f) {
-      const p = c.ptr;
-      if (p.inside) { const k = 0.26 * Math.min(f, 1.5); cx += (p.x * DPR - cx) * k; cy += (p.y * DPR - cy) * k; }
-      amt += ((p.inside ? 1 : 0) - amt) * 0.14 * f;
+      const p = c.ptr, S = c.cfg.strength;
+      if (p.inside) { const k = 0.28 * Math.min(f, 1.5); cx += (p.x * DPR - cx) * k; cy += (p.y * DPR - cy) * k; }
+      amt += ((p.inside ? 1 : 0) - amt) * 0.16 * f;
       out.data.set(src);
-      const Rd = c.cfg.radius * DPR, levels = Math.round(c.cfg.levels ?? 4);
+      const Rd = c.cfg.radius * DPR;
+      const levels = Math.max(2, Math.round(c.cfg.levels ?? 4));
+      const cell = Math.max(2, Math.round((c.cfg.cell ?? 3) * DPR));
       if (amt > 0.02) {
-        const dst = out.data, step = 1 / Math.max(2, levels);
+        const dst = out.data;
         const x0 = Math.max(0, Math.floor(cx - Rd)), x1 = Math.min(Wd, Math.ceil(cx + Rd));
         const y0 = Math.max(0, Math.floor(cy - Rd)), y1 = Math.min(Hd, Math.ceil(cy + Rd));
         for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
           const d = Math.hypot(x - cx, y - cy);
           if (d >= Rd) continue;
-          const t = (1 - d / Rd) * amt, i = (y * Wd + x) * 4;
-          if (!src[i + 3]) continue;
-          const thr = (BAYER4[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
-          const q = (v) => {
-            const n = clamp(v / 255 + (thr - 0.5) * step, 0, 1);
-            return Math.round(n / step) * step * 255;
-          };
-          dst[i] = src[i] * (1 - t) + q(src[i]) * t;
-          dst[i + 1] = src[i + 1] * (1 - t) + q(src[i + 1]) * t;
-          dst[i + 2] = src[i + 2] * (1 - t) + q(src[i + 2]) * t;
+          const i = (y * Wd + x) * 4;
+          if (src[i + 3] < 12) continue;
+          const t = (1 - d / Rd) * amt;
+          const mx = Math.floor(x / cell) & 3, my = Math.floor(y / cell) & 3;
+          const thr = (BAYER4[my * 4 + mx] + 0.5) / 16;
+          const lum = (src[i] * 0.3 + src[i + 1] * 0.59 + src[i + 2] * 0.11) / 255;
+          // Flat logos have no mid greys, so a normal quantize stays black.
+          // Map the ink to a mid tone and let the matrix punch holes.
+          const tone = 0.2 + lum * 0.22 + (levels - 2) * 0.07;
+          const bins = levels - 1;
+          const q = clamp(tone + (thr - 0.5) * (1.15 / bins) * S, 0, 1);
+          const fill = Math.round(q * bins) / bins;
+          dst[i] = src[i];
+          dst[i + 1] = src[i + 1];
+          dst[i + 2] = src[i + 2];
+          dst[i + 3] = src[i + 3] * (1 - t + t * fill);
         }
       }
       c.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -3197,7 +3205,7 @@ const EXTRA = {
   "GSAP smear": [K.duration],
   "Rim glass": [K.bend],
   "Chromatic rim": [K.offset],
-  "Bayer dither": [K.levels],
+  "Bayer dither": [K.levels, K.cell],
   Smudge: [K.fade],
   "Cross-stitch": [K.cell],
   "Ink smoke": [K.puff],
