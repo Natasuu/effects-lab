@@ -29,7 +29,7 @@
   }
   .bar-top {
     display: flex; align-items: center; justify-content: space-between; gap: 24px;
-    padding: 14px 32px;
+    padding: 14px 32px 28px;
   }
   .bar h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
   .bar h1 small { display: block; font: 400 12px/1.3 var(--mono); opacity: .6; letter-spacing: 0; margin-top: 2px; }
@@ -72,6 +72,11 @@
   .card header { display: flex; gap: 12px; padding: 16px 18px 6px; align-items: flex-start; }
   .card h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
   .card p { margin: 3px 0 0; opacity: .72; font-size: 13.5px; }
+  .card .note {
+    margin: 8px 0 0; font: 12px/1.45 var(--mono); opacity: .78;
+    background: rgba(34, 49, 78, 0.06); padding: 7px 8px; border-radius: 4px;
+  }
+  .card .note + .note { margin-top: 4px; }
   .star {
     margin-left: auto; flex: none; width: 36px; height: 36px; border-radius: 4px; cursor: pointer;
     border: 1px solid var(--fg); background: transparent; color: var(--fg); font-size: 18px; line-height: 1;
@@ -91,6 +96,13 @@
   .tag.warn { background: rgba(34, 49, 78, .08); }
   .gsap-root { position: absolute; inset: 0; pointer-events: none; }
   .gsap-root canvas { position: absolute; display: block; will-change: transform; }
+  .gsap-root .wrap { position: absolute; overflow: hidden; }
+  .gsap-root .flap { position: absolute; transform-style: preserve-3d; }
+  .gsap-root .flap .half { position: absolute; left: 0; width: 100%; overflow: hidden; }
+  .gsap-root .flap .shade { position: absolute; inset: 0; background: #111; pointer-events: none; opacity: 0; }
+  .gsap-root .roll { position: absolute; transform-style: preserve-3d; }
+  .gsap-root .scribble { position: absolute; inset: 0; overflow: visible; }
+  .gsap-root .wash { position: absolute; inset: 0; pointer-events: none; }
   .gear {
     flex: none; font: 11px var(--mono); text-transform: uppercase; letter-spacing: .02em;
     padding: 6px 10px; border: 1px solid var(--fg); border-radius: 4px; background: transparent;
@@ -204,6 +216,15 @@ const K = {
   ghosts: kn("ghosts", "Ghosts", 2, 14, 1, 7, (v) => String(Math.round(v))),
   duration: kn("duration", "Duration", 0.2, 1.8, 0.05, 0.7, (v) => v.toFixed(2)),
   stagger: kn("stagger", "Stagger", 0, 0.12, 0.005, 0.03, (v) => v.toFixed(3)),
+  bend: kn("bend", "Bend", -0.8, 0.15, 0.05, -0.3, (v) => v.toFixed(2)),
+  offset: kn("offset", "Offset", 1, 10, 0.5, 4, (v) => v.toFixed(1)),
+  levels: kn("levels", "Levels", 2, 8, 1, 4, (v) => String(Math.round(v))),
+  cell: kn("cell", "Cell", 3, 10, 1, 5, (v) => String(Math.round(v))),
+  puff: kn("puff", "Puff", 0.2, 3, 0.1, 1, (v) => v.toFixed(1)),
+  close: kn("close", "Close", 0.12, 0.55, 0.01, 0.18, (v) => v.toFixed(2)),
+  window: kn("window", "Window", 8, 48, 2, 18, (v) => String(Math.round(v))),
+  seeds: kn("seeds", "Seeds", 8, 48, 1, 22, (v) => String(Math.round(v))),
+  gap: kn("gap", "Gap", 4, 36, 1, 14, (v) => String(Math.round(v))),
 };
 const RS = [K.radius, K.strength];
 
@@ -306,11 +327,19 @@ class Card {
     const d = this.def;
     const knobs = d.knobs;
     knobs.forEach((k) => { this.cfg[k.key] = k.def; this.defaults[k.key] = k.def; });
+    const notes = [];
+    if (d.for === "logo") notes.push("Logo only. Headline is the wrong subject, so this one will look thin, empty, or like a small corner curl.");
+    if (d.for === "headline") notes.push("Headline only. On logos this goes blank, turns to mush, or just jiggles a mark that has no letters to work with.");
+    if (d.guard) notes.push(d.guard);
     const el = document.createElement("article");
     el.className = "card";
     el.innerHTML = `
       <header>
-        <div><h2>${d.name}</h2><p>${d.blurb}</p></div>
+        <div>
+          <h2>${d.name}</h2>
+          <p>${d.blurb}</p>
+          ${notes.map((n) => `<p class="note">${n}</p>`).join("")}
+        </div>
         <button class="star" aria-pressed="false" aria-label="Pick ${d.name}" title="Pick this one">☆</button>
       </header>
       <div class="stage"><canvas></canvas><div class="ring"></div></div>
@@ -1539,7 +1568,28 @@ function gsapFx(c, mode) {
         rx: gsap.quickTo(n.el, "rotationX", { duration: dur, ease: "power3" }),
         ry: gsap.quickTo(n.el, "rotationY", { duration: dur, ease: "power3" }),
         kx: gsap.quickTo(n.el, "skewX", { duration: 0.25, ease: "power2" }),
+        ox: gsap.quickTo(n.el, "x", { duration: 0.58, ease: "back.out(1.7)" }),
+        oy: gsap.quickTo(n.el, "y", { duration: 0.58, ease: "back.out(1.7)" }),
       }));
+      if (mode === "color") {
+        nodes.forEach((n) => {
+          const wash = document.createElement("div");
+          wash.className = "wash";
+          wash.style.left = n.L.x + "px";
+          wash.style.top = n.L.y + "px";
+          wash.style.width = n.L.w + "px";
+          wash.style.height = n.L.h + "px";
+          wash.style.background = "#e4ff8c";
+          wash.style.opacity = "0";
+          wash.style.webkitMaskImage = `url(${n.el.toDataURL()})`;
+          wash.style.maskImage = `url(${n.el.toDataURL()})`;
+          wash.style.webkitMaskSize = "100% 100%";
+          wash.style.maskSize = "100% 100%";
+          root.appendChild(wash);
+          n.wash = wash;
+          gsap.set(n.el, { x: 0, y: 0 });
+        });
+      }
     },
     enter() {
       if (!ready() || !nodes) return;
@@ -1596,6 +1646,13 @@ function gsapFx(c, mode) {
             gsap.to(n.el, { x: vx * 0.08, y: vy * 0.08, rotation: (rnd() - 0.5) * 25 * S, duration: 0.35, ease: "power2.out", overwrite: true });
           }
         });
+      } else if (mode === "tracking") {
+        kill();
+        const mid = (nodes.length - 1) / 2;
+        const gap = (c.cfg.gap ?? 14) * S;
+        nodes.forEach((n, i) => {
+          gsap.to(n.el, { x: (i - mid) * gap, y: 0, rotation: 0, duration: dur, ease: "power2.out", overwrite: true });
+        });
       }
     },
     leave() {
@@ -1605,8 +1662,19 @@ function gsapFx(c, mode) {
         home("elastic.out(1, 0.5)");
         return;
       }
-      if (mode === "explode" || mode === "cascade" || mode === "swap" || mode === "scramble" || mode === "wiggle" || mode === "inertia") {
+      if (mode === "explode" || mode === "cascade" || mode === "swap" || mode === "scramble" || mode === "wiggle" || mode === "inertia" || mode === "tracking") {
         home(mode === "cascade" ? "bounce.out" : "elastic.out(1, 0.55)");
+      }
+      if (mode === "overshoot" || mode === "swing") {
+        nodes.forEach((n) => {
+          gsap.to(n.el, {
+            x: 0, y: 0, rotation: 0, filter: "brightness(1)",
+            duration: c.cfg.duration ?? 0.7, ease: "elastic.out(1, 0.55)", overwrite: true,
+          });
+        });
+      }
+      if (mode === "color") {
+        nodes.forEach((n) => { if (n.wash) gsap.to(n.wash, { opacity: 0, duration: 0.35, overwrite: true }); });
       }
     },
     step() {
@@ -1635,7 +1703,7 @@ function gsapFx(c, mode) {
         }
         return p.inside || nodes.some((n) => gsap.isTweening(n.el));
       }
-      if (p.inside && (mode === "flip3d" || mode === "orbit" || mode === "smear")) {
+      if (p.inside && (mode === "flip3d" || mode === "orbit" || mode === "smear" || mode === "overshoot" || mode === "swing" || mode === "color")) {
         nodes.forEach((n, i) => {
           const l = lin(dist(n), R);
           if (mode === "flip3d") {
@@ -1651,13 +1719,41 @@ function gsapFx(c, mode) {
             const dir = p.x >= p.px ? 1 : -1;
             q[i].kx(clamp(p.speed * dir * 0.35 * S * l, -28, 28));
             q[i].x((p.x - n.L.cx) * 0.08 * S * l);
+          } else if (mode === "overshoot") {
+            const dx = n.L.cx - p.x, dy = n.L.cy - p.y, d = Math.hypot(dx, dy) || 1;
+            const pull = Math.min(d * 0.55, (c.cfg.pull ?? 30) * S) * l;
+            q[i].ox((-dx / d) * pull);
+            q[i].oy((-dy / d) * pull);
+          } else if (mode === "swing") {
+            n.sx = n.sx ?? 0; n.sy = n.sy ?? 0; n.sr = n.sr ?? 0; n.sb = n.sb ?? 1;
+            const tx = (p.x - n.L.cx) * 0.16 * S * l;
+            const ty = (p.y - n.L.cy) * 0.16 * S * l;
+            const tr = (p.x - n.L.cx) * 0.09 * S * l;
+            const tb = 1 + 0.55 * S * l;
+            const k = 0.14;
+            n.sx += (tx - n.sx) * k; n.sy += (ty - n.sy) * k;
+            n.sr += (tr - n.sr) * k; n.sb += (tb - n.sb) * k;
+            gsap.set(n.el, { x: n.sx, y: n.sy, rotation: n.sr, filter: `brightness(${n.sb})` });
+          } else if (mode === "color" && n.wash) {
+            n.wash.style.transform = `translate(${gsap.getProperty(n.el, "x")}px, ${gsap.getProperty(n.el, "y")}px)`;
+            gsap.set(n.wash, { opacity: l });
           }
         });
       }
       if (!p.inside && (mode === "flip3d" || mode === "orbit" || mode === "smear")) {
         nodes.forEach((n, i) => { q[i].x(0); q[i].y(0); q[i].s(1); q[i].r(0); q[i].rx(0); q[i].ry(0); q[i].kx(0); });
       }
-      return p.inside || nodes.some((n) => gsap.isTweening(n.el));
+      if (!p.inside && mode === "overshoot") {
+        nodes.forEach((n, i) => { q[i].ox(0); q[i].oy(0); });
+      }
+      if (!p.inside && mode === "swing") {
+        nodes.forEach((n) => {
+          n.sx = (n.sx ?? 0) * 0.86; n.sy = (n.sy ?? 0) * 0.86;
+          n.sr = (n.sr ?? 0) * 0.86; n.sb = 1 + ((n.sb ?? 1) - 1) * 0.86;
+          gsap.set(n.el, { x: n.sx, y: n.sy, rotation: n.sr, filter: `brightness(${n.sb})` });
+        });
+      }
+      return p.inside || nodes.some((n) => gsap.isTweening(n.el) || (n.wash && gsap.isTweening(n.wash)));
     },
   };
 }
@@ -1726,6 +1822,1142 @@ function duotoneFx(c) {
       c.ctx.setTransform(1, 0, 0, 1, 0, 0);
       c.ctx.putImageData(out, 0, 0);
       return p.inside || amt > 0.01;
+    },
+  };
+}
+
+function mountGsapRoot(c) {
+  if (c._gsapRoot) c._gsapRoot.remove();
+  const root = document.createElement("div");
+  root.className = "gsap-root";
+  c.stage.appendChild(root);
+  c._gsapRoot = root;
+  c.canvas.style.opacity = "0";
+  return root;
+}
+function layerCanvas(L) {
+  const el = document.createElement("canvas");
+  el.width = L.c.width; el.height = L.c.height;
+  el.getContext("2d").drawImage(L.c, 0, 0);
+  el.style.left = L.x + "px"; el.style.top = L.y + "px";
+  el.style.width = L.w + "px"; el.style.height = L.h + "px";
+  return el;
+}
+function groupLines(layers) {
+  const map = new Map();
+  layers.forEach((L, i) => {
+    const k = Math.round(L.y);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push({ L, i });
+  });
+  return [...map.values()];
+}
+
+/* Rim-refraction glass: bend is strongest at the rim, center stays true. */
+function glassFx(c) {
+  let src32, out, out32, Wd, Hd, amt = 0, v = 0, cx = 0, cy = 0;
+  return {
+    init() {
+      Wd = c.canvas.width; Hd = c.canvas.height;
+      src32 = new Uint32Array(c.compositeData().data.buffer.slice(0));
+      out = c.ctx.createImageData(Wd, Hd); out32 = new Uint32Array(out.data.buffer);
+      amt = v = 0;
+    },
+    enter() { cx = c.ptr.x * DPR; cy = c.ptr.y * DPR; },
+    step(f) {
+      const p = c.ptr, S = c.cfg.strength, kBend = c.cfg.bend ?? -0.3;
+      if (p.inside) { const k = 0.28 * Math.min(f, 1.5); cx += (p.x * DPR - cx) * k; cy += (p.y * DPR - cy) * k; }
+      v = (v + ((p.inside ? 1 : 0) - amt) * 0.12 * f) * Math.pow(0.74, f);
+      amt += v * f;
+      out32.set(src32);
+      const cap = params.subject === "headline" ? 48 * DPR : 9999;
+      const Rd = Math.min(c.cfg.radius * 0.48 * Math.max(amt, 0) * DPR, cap);
+      const alive = p.inside || Math.abs(amt) > 0.003 || Math.abs(v) > 0.003;
+      if (Rd > 2) {
+        const x0 = Math.max(0, Math.floor(cx - Rd)), x1 = Math.min(Wd, Math.ceil(cx + Rd));
+        const y0 = Math.max(0, Math.floor(cy - Rd)), y1 = Math.min(Hd, Math.ceil(cy + Rd));
+        const R2 = Rd * Rd;
+        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+          const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
+          if (d2 >= R2 || d2 < 1) continue;
+          const d = Math.sqrt(d2), norm = 1 - d / Rd;
+          const fct = 1 + kBend * S * (1 - norm) * (1 - norm);
+          const sx = Math.round(cx + dx * fct), sy = Math.round(cy + dy * fct);
+          out32[y * Wd + x] = sx < 0 || sy < 0 || sx >= Wd || sy >= Hd ? 0 : src32[sy * Wd + sx];
+          if (norm < 0.12) {
+            const t = 1 - norm / 0.12, i = y * Wd + x, s = out32[i];
+            const r = Math.min(255, (s & 255) + 40 * t);
+            const g = Math.min(255, ((s >> 8) & 255) + 40 * t);
+            const b = Math.min(255, ((s >> 16) & 255) + 40 * t);
+            out32[i] = ((s >>> 24) << 24) | (b << 16) | (g << 8) | r;
+          }
+        }
+      }
+      c.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      c.ctx.putImageData(out, 0, 0);
+      return alive;
+    },
+  };
+}
+
+/* Chromatic rim: RGB split along the radius, locked at the center. Never moves a row. */
+function chromaRimFx(c) {
+  let src, out, Wd, Hd, amt = 0, v = 0, cx = 0, cy = 0;
+  return {
+    init() {
+      Wd = c.canvas.width; Hd = c.canvas.height;
+      src = new Uint8ClampedArray(c.compositeData().data);
+      out = c.ctx.createImageData(Wd, Hd);
+      amt = v = 0;
+    },
+    enter() { cx = c.ptr.x * DPR; cy = c.ptr.y * DPR; },
+    step(f) {
+      const p = c.ptr, S = c.cfg.strength;
+      if (p.inside) { const k = 0.28 * Math.min(f, 1.5); cx += (p.x * DPR - cx) * k; cy += (p.y * DPR - cy) * k; }
+      v = (v + ((p.inside ? 1 : 0) - amt) * 0.12 * f) * Math.pow(0.74, f);
+      amt += v * f;
+      out.data.set(src);
+      const Rd = c.cfg.radius * 0.7 * Math.max(amt, 0) * DPR;
+      const offMax = (c.cfg.offset ?? 4) * S * amt;
+      const alive = p.inside || Math.abs(amt) > 0.003 || Math.abs(v) > 0.003;
+      if (Rd > 2 && offMax > 0.2) {
+        const dst = out.data;
+        const x0 = Math.max(0, Math.floor(cx - Rd)), x1 = Math.min(Wd, Math.ceil(cx + Rd));
+        const y0 = Math.max(0, Math.floor(cy - Rd)), y1 = Math.min(Hd, Math.ceil(cy + Rd));
+        const R2 = Rd * Rd;
+        const samp = (x, y, ch) => {
+          const ix = clamp(Math.round(x), 0, Wd - 1), iy = clamp(Math.round(y), 0, Hd - 1);
+          return src[(iy * Wd + ix) * 4 + ch];
+        };
+        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+          const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
+          if (d2 >= R2 || d2 < 1) continue;
+          const d = Math.sqrt(d2), n = d / Rd, o = offMax * n * n;
+          const ux = dx / d, uy = dy / d, i = (y * Wd + x) * 4;
+          dst[i] = samp(x + ux * o, y + uy * o, 0);
+          dst[i + 1] = samp(x, y, 1);
+          dst[i + 2] = samp(x - ux * o, y - uy * o, 2);
+        }
+      }
+      c.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      c.ctx.putImageData(out, 0, 0);
+      return alive;
+    },
+  };
+}
+
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function bayerFx(c) {
+  let src, out, Wd, Hd, amt = 0, cx = 0, cy = 0;
+  return {
+    init() {
+      Wd = c.canvas.width; Hd = c.canvas.height;
+      src = new Uint8ClampedArray(c.compositeData().data);
+      out = c.ctx.createImageData(Wd, Hd);
+      amt = 0;
+    },
+    enter() { cx = c.ptr.x * DPR; cy = c.ptr.y * DPR; },
+    step(f) {
+      const p = c.ptr;
+      if (p.inside) { const k = 0.26 * Math.min(f, 1.5); cx += (p.x * DPR - cx) * k; cy += (p.y * DPR - cy) * k; }
+      amt += ((p.inside ? 1 : 0) - amt) * 0.14 * f;
+      out.data.set(src);
+      const Rd = c.cfg.radius * DPR, levels = Math.round(c.cfg.levels ?? 4);
+      if (amt > 0.02) {
+        const dst = out.data, step = 1 / Math.max(2, levels);
+        const x0 = Math.max(0, Math.floor(cx - Rd)), x1 = Math.min(Wd, Math.ceil(cx + Rd));
+        const y0 = Math.max(0, Math.floor(cy - Rd)), y1 = Math.min(Hd, Math.ceil(cy + Rd));
+        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+          const d = Math.hypot(x - cx, y - cy);
+          if (d >= Rd) continue;
+          const t = (1 - d / Rd) * amt, i = (y * Wd + x) * 4;
+          if (!src[i + 3]) continue;
+          const thr = (BAYER4[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
+          const q = (v) => {
+            const n = clamp(v / 255 + (thr - 0.5) * step, 0, 1);
+            return Math.round(n / step) * step * 255;
+          };
+          dst[i] = src[i] * (1 - t) + q(src[i]) * t;
+          dst[i + 1] = src[i + 1] * (1 - t) + q(src[i + 1]) * t;
+          dst[i + 2] = src[i + 2] * (1 - t) + q(src[i + 2]) * t;
+        }
+      }
+      c.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      c.ctx.putImageData(out, 0, 0);
+      return p.inside || amt > 0.02;
+    },
+  };
+}
+
+function smudgeFx(c) {
+  let live, live8, clean, Wd, Hd, lx = null, ly = 0, amt = 0;
+  return {
+    init() {
+      Wd = c.canvas.width; Hd = c.canvas.height;
+      clean = c.composite();
+      live = document.createElement("canvas"); live.width = Wd; live.height = Hd;
+      const g = live.getContext("2d", { willReadFrequently: true });
+      g.drawImage(clean, 0, 0);
+      live8 = g;
+      lx = null; amt = 0;
+    },
+    enter() { lx = c.ptr.x * DPR; ly = c.ptr.y * DPR; },
+    leave() { lx = null; },
+    step(f) {
+      const p = c.ptr, g = c.ctx, S = c.cfg.strength;
+      const rad = Math.max(6, c.cfg.radius * 0.28) * DPR;
+      if (p.inside) {
+        const mx = p.x * DPR, my = p.y * DPR;
+        if (lx == null) { lx = mx; ly = my; }
+        const stamp = document.createElement("canvas");
+        const rs = Math.ceil(rad * 2 + 2);
+        stamp.width = stamp.height = rs;
+        const sg = stamp.getContext("2d");
+        sg.drawImage(live, lx - rad, ly - rad, rs, rs, 0, 0, rs, rs);
+        live8.save();
+        live8.beginPath(); live8.arc(mx, my, rad, 0, 6.2832); live8.clip();
+        live8.globalAlpha = 0.22 * S;
+        live8.drawImage(stamp, mx - rad, my - rad);
+        live8.restore();
+        lx = mx; ly = my; amt = 1;
+      } else {
+        amt += (0 - amt) * 0.08 * f;
+        if (amt < 0.02) {
+          live8.clearRect(0, 0, Wd, Hd);
+          live8.drawImage(clean, 0, 0);
+          amt = 0;
+        }
+      }
+      c.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, Wd, Hd);
+      g.drawImage(live, 0, 0);
+      if (!p.inside && amt > 0) {
+        g.globalAlpha = 1 - amt;
+        g.drawImage(clean, 0, 0);
+        g.globalAlpha = 1;
+      }
+      return p.inside || amt > 0.02;
+    },
+  };
+}
+
+function stitchFx(c) {
+  let amt = 0, cx = 0, cy = 0;
+  return {
+    init() { amt = 0; },
+    enter() { cx = c.ptr.x; cy = c.ptr.y; },
+    step(f) {
+      const p = c.ptr, g = c.ctx, cell = Math.round(c.cfg.cell ?? 5);
+      if (p.inside) { const k = 0.28 * Math.min(f, 1.5); cx += (p.x - cx) * k; cy += (p.y - cy) * k; }
+      amt += ((p.inside ? 1 : 0) - amt) * 0.16 * f;
+      c.clear();
+      const src = c.composite();
+      g.drawImage(src, 0, 0, c.W, c.H);
+      if (amt < 0.03) return p.inside;
+      const R = c.cfg.radius * amt, tmp = document.createElement("canvas");
+      tmp.width = Math.max(1, Math.ceil(c.W / cell)); tmp.height = Math.max(1, Math.ceil(c.H / cell));
+      const tg = tmp.getContext("2d");
+      tg.drawImage(src, 0, 0, tmp.width, tmp.height);
+      const data = tg.getImageData(0, 0, tmp.width, tmp.height).data;
+      g.save();
+      g.beginPath(); g.arc(cx, cy, R, 0, 6.2832); g.clip();
+      g.clearRect(0, 0, c.W, c.H);
+      g.lineWidth = Math.max(1, cell * 0.22);
+      g.lineCap = "round";
+      for (let j = 0; j < tmp.height; j++) for (let i = 0; i < tmp.width; i++) {
+        const o = (j * tmp.width + i) * 4;
+        if (data[o + 3] < 30) continue;
+        const x = i * cell + cell / 2, y = j * cell + cell / 2;
+        if (Math.hypot(x - cx, y - cy) > R) continue;
+        const lum = data[o] * 0.3 + data[o + 1] * 0.59 + data[o + 2] * 0.11;
+        g.strokeStyle = lum > 140 ? "#e4ff8c" : INK;
+        const h = cell * 0.38;
+        g.beginPath(); g.moveTo(x - h, y - h); g.lineTo(x + h, y + h); g.stroke();
+        g.beginPath(); g.moveTo(x + h, y - h); g.lineTo(x - h, y + h); g.stroke();
+      }
+      g.restore();
+      return p.inside || amt > 0.03;
+    },
+  };
+}
+
+function smokeFx(c) {
+  let parts = [], src32, Wd, Hd;
+  return {
+    init() {
+      Wd = c.canvas.width; Hd = c.canvas.height;
+      src32 = new Uint32Array(c.compositeData().data.buffer.slice(0));
+      parts = [];
+    },
+    step(f) {
+      const p = c.ptr, R = c.cfg.radius, S = c.cfg.strength, rate = (c.cfg.puff ?? 1) * 3 * S;
+      if (p.inside) {
+        const n = Math.max(1, Math.round(rate));
+        for (let k = 0; k < n; k++) {
+          const a = rnd() * 6.2832, d = rnd() * R;
+          const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+          const ix = clamp(Math.round(x * DPR), 0, Wd - 1), iy = clamp(Math.round(y * DPR), 0, Hd - 1);
+          if ((src32[iy * Wd + ix] >>> 24) < 16) continue;
+          parts.push({ x, y, vx: (rnd() - 0.5) * 0.4, vy: -0.7 - rnd() * 0.8, life: 1, r: 4 + rnd() * 8 * S });
+        }
+      }
+      for (const q of parts) {
+        q.vy -= 0.03 * f; q.x += q.vx * f; q.y += q.vy * f; q.life -= 0.012 * f;
+      }
+      parts = parts.filter((q) => q.life > 0).slice(-180);
+      c.clear();
+      const g = c.ctx;
+      g.drawImage(c.composite(), 0, 0, c.W, c.H);
+      for (const q of parts) {
+        g.globalAlpha = q.life * 0.45;
+        const grd = g.createRadialGradient(q.x, q.y, 0, q.x, q.y, q.r);
+        grd.addColorStop(0, "rgba(34,49,78,0.55)");
+        grd.addColorStop(1, "rgba(34,49,78,0)");
+        g.fillStyle = grd;
+        g.beginPath(); g.arc(q.x, q.y, q.r, 0, 6.2832); g.fill();
+      }
+      g.globalAlpha = 1;
+      return p.inside || parts.length > 0;
+    },
+  };
+}
+
+function slatFx(c) {
+  const BH = 7;
+  let st = [];
+  return {
+    init() { st = c.layers.map((L) => new Float32Array(Math.max(1, Math.ceil(L.h / BH)))); },
+    step(f) {
+      const p = c.ptr, R = c.cfg.radius, S = c.cfg.strength, g = c.ctx;
+      const closed = c.cfg.close ?? 0.18;
+      let any = p.inside;
+      c.clear();
+      c.layers.forEach((L, li) => {
+        const e = st[li], n = e.length;
+        let moving = false;
+        for (let i = 0; i < n; i++) {
+          const mid = L.y + (i + 0.5) * BH;
+          const target = p.inside ? lin(Math.hypot(L.cx - p.x, mid - p.y), R) : 0;
+          e[i] += (target - e[i]) * 0.18 * Math.min(f, 1.5);
+          if (e[i] > 0.01) moving = true; else if (target === 0) e[i] = 0;
+        }
+        if (!moving) { g.drawImage(L.c, L.x, L.y, L.w, L.h); return; }
+        any = true;
+        const bh = BH * DPR;
+        for (let i = 0; i < n; i++) {
+          const sy = Math.round(i * bh), hpx = Math.min(bh + 1, L.c.height - sy);
+          if (hpx <= 0) continue;
+          const sc = 1 - (1 - closed) * Math.min(1, e[i] * S);
+          const mid = L.y + (i + 0.5) * BH;
+          g.drawImage(L.c, 0, sy, L.c.width, hpx, L.x, mid - (BH * sc) / 2, L.w, BH * sc);
+        }
+      });
+      return any;
+    },
+  };
+}
+
+function pixelSortFx(c) {
+  let src, out, Wd, Hd, amt = 0, cx = 0, cy = 0;
+  return {
+    init() {
+      Wd = c.canvas.width; Hd = c.canvas.height;
+      src = new Uint8ClampedArray(c.compositeData().data);
+      out = c.ctx.createImageData(Wd, Hd);
+      amt = 0;
+    },
+    enter() { cx = c.ptr.x * DPR; cy = c.ptr.y * DPR; },
+    step(f) {
+      const p = c.ptr, Rd = c.cfg.radius * DPR, win = Math.round(c.cfg.window ?? 18);
+      if (p.inside) { const k = 0.3 * Math.min(f, 1.5); cx += (p.x * DPR - cx) * k; cy += (p.y * DPR - cy) * k; }
+      amt += ((p.inside ? 1 : 0) - amt) * 0.16 * f;
+      out.data.set(src);
+      if (amt > 0.03) {
+        const dst = out.data;
+        const y0 = Math.max(0, Math.floor(cy - Rd)), y1 = Math.min(Hd, Math.ceil(cy + Rd));
+        for (let y = y0; y < y1; y++) {
+          if (Math.abs(y - cy) > Rd) continue;
+          let x = 0;
+          while (x < Wd) {
+            const i0 = (y * Wd + x) * 4;
+            if (src[i0 + 3] < 16) { x++; continue; }
+            let x1 = x + 1;
+            while (x1 < Wd && src[(y * Wd + x1) * 4 + 3] >= 16) x1++;
+            const mid = (x + x1) / 2;
+            if (Math.hypot(mid - cx, y - cy) < Rd) {
+              const a = Math.max(x, Math.round(cx - win)), b = Math.min(x1, Math.round(cx + win));
+              if (b - a > 2) {
+                const pix = [];
+                for (let xx = a; xx < b; xx++) {
+                  const i = (y * Wd + xx) * 4;
+                  pix.push({ i, lum: src[i] * 0.3 + src[i + 1] * 0.59 + src[i + 2] * 0.11, r: src[i], g: src[i + 1], b: src[i + 2], a: src[i + 3] });
+                }
+                pix.sort((u, v) => u.lum - v.lum);
+                pix.forEach((px, n) => {
+                  const i = (y * Wd + a + n) * 4;
+                  dst[i] = px.r; dst[i + 1] = px.g; dst[i + 2] = px.b; dst[i + 3] = px.a;
+                });
+              }
+            }
+            x = x1;
+          }
+        }
+      }
+      c.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      c.ctx.putImageData(out, 0, 0);
+      return p.inside || amt > 0.03;
+    },
+  };
+}
+
+function sketchFx(c) {
+  let src, gray, blur, out, Wd, Hd, amt = 0, cx = 0, cy = 0;
+  const box = (from, to, rad) => {
+    const tmp = new Float32Array(Wd * Hd);
+    for (let y = 0; y < Hd; y++) {
+      let acc = 0, n = 0;
+      for (let x = 0; x < Wd; x++) {
+        acc += from[y * Wd + x]; n++;
+        if (x >= rad) { acc -= from[y * Wd + x - rad]; n--; }
+        tmp[y * Wd + x] = acc / n;
+      }
+    }
+    for (let x = 0; x < Wd; x++) {
+      let acc = 0, n = 0;
+      for (let y = 0; y < Hd; y++) {
+        acc += tmp[y * Wd + x]; n++;
+        if (y >= rad) { acc -= tmp[(y - rad) * Wd + x]; n--; }
+        to[y * Wd + x] = acc / n;
+      }
+    }
+  };
+  return {
+    init() {
+      Wd = c.canvas.width; Hd = c.canvas.height;
+      src = new Uint8ClampedArray(c.compositeData().data);
+      gray = new Float32Array(Wd * Hd);
+      blur = new Float32Array(Wd * Hd);
+      for (let i = 0, p = 0; i < src.length; i += 4, p++) {
+        gray[p] = src[i] * 0.3 + src[i + 1] * 0.59 + src[i + 2] * 0.11;
+      }
+      box(gray, blur, Math.round(c.cfg.blur ?? 4) * DPR);
+      out = c.ctx.createImageData(Wd, Hd);
+      amt = 0;
+    },
+    enter() { cx = c.ptr.x * DPR; cy = c.ptr.y * DPR; },
+    step(f) {
+      const p = c.ptr, Rd = c.cfg.radius * DPR;
+      if (p.inside) { const k = 0.26 * Math.min(f, 1.5); cx += (p.x * DPR - cx) * k; cy += (p.y * DPR - cy) * k; }
+      amt += ((p.inside ? 1 : 0) - amt) * 0.14 * f;
+      out.data.set(src);
+      if (amt > 0.02) {
+        const dst = out.data;
+        const x0 = Math.max(0, Math.floor(cx - Rd)), x1 = Math.min(Wd, Math.ceil(cx + Rd));
+        const y0 = Math.max(0, Math.floor(cy - Rd)), y1 = Math.min(Hd, Math.ceil(cy + Rd));
+        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+          const d = Math.hypot(x - cx, y - cy);
+          if (d >= Rd) continue;
+          const t = (1 - d / Rd) * amt, i = (y * Wd + x) * 4, pxl = y * Wd + x;
+          if (!src[i + 3]) continue;
+          const inv = 255 - blur[pxl];
+          const dodge = gray[pxl] / Math.max(0.008, 1 - inv / 255);
+          const v = clamp(dodge, 0, 255);
+          dst[i] = src[i] * (1 - t) + v * t;
+          dst[i + 1] = src[i + 1] * (1 - t) + v * t;
+          dst[i + 2] = src[i + 2] * (1 - t) + v * t;
+        }
+      }
+      c.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      c.ctx.putImageData(out, 0, 0);
+      return p.inside || amt > 0.02;
+    },
+  };
+}
+
+function voronoiFx(c) {
+  let src32, out, out32, Wd, Hd, seeds = [], amt = 0, cx = 0, cy = 0;
+  return {
+    init() {
+      Wd = c.canvas.width; Hd = c.canvas.height;
+      src32 = new Uint32Array(c.compositeData().data.buffer.slice(0));
+      out = c.ctx.createImageData(Wd, Hd); out32 = new Uint32Array(out.data.buffer);
+      const n = Math.round(c.cfg.seeds ?? 22), pts = [];
+      for (let k = 0; k < n * 18 && pts.length < n; k++) {
+        const x = (rnd() * Wd) | 0, y = (rnd() * Hd) | 0, s = src32[y * Wd + x];
+        if ((s >>> 24) < 20) continue;
+        pts.push({ x, y, c: s });
+      }
+      seeds = pts;
+      amt = 0;
+    },
+    enter() { cx = c.ptr.x * DPR; cy = c.ptr.y * DPR; },
+    step(f) {
+      const p = c.ptr, Rd = c.cfg.radius * DPR;
+      if (p.inside) { const k = 0.26 * Math.min(f, 1.5); cx += (p.x * DPR - cx) * k; cy += (p.y * DPR - cy) * k; }
+      amt += ((p.inside ? 1 : 0) - amt) * 0.14 * f;
+      out32.set(src32);
+      if (amt > 0.03 && seeds.length) {
+        const x0 = Math.max(0, Math.floor(cx - Rd)), x1 = Math.min(Wd, Math.ceil(cx + Rd));
+        const y0 = Math.max(0, Math.floor(cy - Rd)), y1 = Math.min(Hd, Math.ceil(cy + Rd));
+        for (let y = y0; y < y1; y += 1) for (let x = x0; x < x1; x += 1) {
+          const d = Math.hypot(x - cx, y - cy);
+          if (d >= Rd || !(src32[y * Wd + x] >>> 24)) continue;
+          let d1 = 1e12, d2 = 1e12, c1 = seeds[0];
+          for (const s of seeds) {
+            const dd = (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y);
+            if (dd < d1) { d2 = d1; d1 = dd; c1 = s; }
+            else if (dd < d2) d2 = dd;
+          }
+          const t = (1 - d / Rd) * amt;
+          let col = c1.c;
+          if (Math.sqrt(d2) - Math.sqrt(d1) < 1.4 * DPR) col = (255 << 24) | (40 << 16) | (30 << 8) | 20;
+          if (t > 0.85) out32[y * Wd + x] = col;
+          else if (rnd() < t) out32[y * Wd + x] = col;
+        }
+      }
+      c.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      c.ctx.putImageData(out, 0, 0);
+      return p.inside || amt > 0.03;
+    },
+  };
+}
+
+function metaballFx(c) {
+  let blobs = [], amt = 0, cx = 0, cy = 0;
+  return {
+    init() {
+      blobs = [];
+      const src = c.compositeData().data, Wd = c.canvas.width, Hd = c.canvas.height, step = 12 * DPR;
+      for (let y = 0; y < Hd; y += step) for (let x = 0; x < Wd; x += step) {
+        const i = (y * Wd + x) * 4;
+        if (src[i + 3] < 30) continue;
+        blobs.push({ x: x / DPR, y: y / DPR, r: 9 + rnd() * 4, cr: src[i], cg: src[i + 1], cb: src[i + 2] });
+      }
+      amt = 0;
+    },
+    enter() { cx = c.ptr.x; cy = c.ptr.y; },
+    step(f) {
+      const p = c.ptr, R = c.cfg.radius, S = c.cfg.strength, g = c.ctx;
+      if (p.inside) { const k = 0.28 * Math.min(f, 1.5); cx += (p.x - cx) * k; cy += (p.y - cy) * k; }
+      amt += ((p.inside ? 1 : 0) - amt) * 0.14 * f;
+      c.clear();
+      g.drawImage(c.composite(), 0, 0, c.W, c.H);
+      if (amt < 0.03 || !blobs.length) return p.inside;
+      const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(c.W, Math.ceil(cx + R));
+      const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(c.H, Math.ceil(cy + R));
+      const img = g.getImageData(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+      const d = img.data, w = img.width;
+      for (let y = 0; y < img.height; y++) for (let x = 0; x < w; x++) {
+        const px = x0 + x, py = y0 + y, dist = Math.hypot(px - cx, py - cy);
+        if (dist >= R) continue;
+        let field = 0, br = 34, bg = 49, bb = 78, best = 0;
+        for (const b of blobs) {
+          const dd = (px - b.x) * (px - b.x) + (py - b.y) * (py - b.y) || 0.3;
+          const grow = 1 + 1.4 * S * lin(Math.hypot(b.x - cx, b.y - cy), R) * amt;
+          const v = (b.r * grow) * (b.r * grow) / dd;
+          field += v;
+          if (v > best) { best = v; br = b.cr; bg = b.cg; bb = b.cb; }
+        }
+        if (field > 1) {
+          const i = (y * w + x) * 4, t = Math.min(1, (field - 1) * 1.4) * amt;
+          d[i] = d[i] * (1 - t) + br * t;
+          d[i + 1] = d[i + 1] * (1 - t) + bg * t;
+          d[i + 2] = d[i + 2] * (1 - t) + bb * t;
+          d[i + 3] = Math.max(d[i + 3], 220 * t);
+        }
+      }
+      g.putImageData(img, x0, y0);
+      return p.inside || amt > 0.03;
+    },
+  };
+}
+
+function sheenFx(c) {
+  let t = 0, play = false, slab = null, sg = null;
+  return {
+    init() {
+      t = 0; play = false;
+      slab = document.createElement("canvas");
+      slab.width = c.canvas.width; slab.height = c.canvas.height;
+      sg = slab.getContext("2d");
+    },
+    enter() { t = 0; play = true; },
+    step(f) {
+      const g = c.ctx, src = c.composite();
+      c.clear();
+      g.drawImage(src, 0, 0, c.W, c.H);
+      if (play) {
+        t += 0.016 * f * (c.cfg.speed ?? 7) * 0.35 * c.cfg.strength;
+        const pos = (t - 0.15) * (c.W + c.H + 80);
+        sg.setTransform(1, 0, 0, 1, 0, 0);
+        sg.clearRect(0, 0, slab.width, slab.height);
+        sg.setTransform(DPR, 0, 0, DPR, 0, 0);
+        sg.save();
+        sg.translate(pos, 0);
+        sg.rotate(-Math.PI / 4);
+        sg.fillStyle = "rgba(255,255,255,0.55)";
+        sg.fillRect(-22, -c.H, 44, c.H * 3);
+        sg.restore();
+        sg.setTransform(1, 0, 0, 1, 0, 0);
+        sg.globalCompositeOperation = "destination-in";
+        sg.drawImage(src, 0, 0);
+        sg.globalCompositeOperation = "source-over";
+        g.drawImage(slab, 0, 0, c.W, c.H);
+        if (t > 1.35) play = false;
+      }
+      return play || c.ptr.inside;
+    },
+  };
+}
+
+function xrayFx(c) {
+  let under = null, top = null, tg = null, amt = 0, v = 0, cx = 0, cy = 0;
+  return {
+    init() {
+      under = document.createElement("canvas");
+      under.width = c.canvas.width; under.height = c.canvas.height;
+      const g = under.getContext("2d");
+      g.setTransform(DPR, 0, 0, DPR, 0, 0);
+      g.fillStyle = "#182236";
+      g.fillRect(0, 0, c.W, c.H);
+      g.strokeStyle = "rgba(228,255,140,0.16)";
+      g.lineWidth = 1;
+      for (let i = -c.H; i < c.W + c.H; i += 7) {
+        g.beginPath(); g.moveTo(i, 0); g.lineTo(i + c.H, c.H); g.stroke();
+      }
+      g.font = "11px ui-monospace, SF Mono, Menlo, monospace";
+      g.fillStyle = "#e4ff8c";
+      g.fillText("08  24  DENSITY", 16, 22);
+      g.fillText("LAYER B", c.W - 84, c.H - 14);
+      const lime = tintCanvas(c.composite(), "#e4ff8c");
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.drawImage(lime, 0, 0);
+      top = document.createElement("canvas");
+      top.width = c.canvas.width; top.height = c.canvas.height;
+      tg = top.getContext("2d");
+      amt = v = 0;
+    },
+    enter() { cx = c.ptr.x; cy = c.ptr.y; },
+    step(f) {
+      const p = c.ptr, g = c.ctx;
+      if (p.inside) { const k = 0.32 * Math.min(f, 1.5); cx += (p.x - cx) * k; cy += (p.y - cy) * k; }
+      v = (v + ((p.inside ? 1 : 0) - amt) * 0.16 * f) * Math.pow(0.72, f);
+      amt += v * f;
+      c.clear();
+      g.drawImage(under, 0, 0, c.W, c.H);
+      tg.setTransform(1, 0, 0, 1, 0, 0);
+      tg.clearRect(0, 0, top.width, top.height);
+      tg.drawImage(c.composite(), 0, 0);
+      if (Math.abs(amt) > 0.01) {
+        tg.save();
+        tg.setTransform(DPR, 0, 0, DPR, 0, 0);
+        tg.globalCompositeOperation = "destination-out";
+        tg.beginPath();
+        tg.arc(cx, cy, Math.max(0.1, c.cfg.radius * 0.72 * amt), 0, 6.2832);
+        tg.fill();
+        tg.restore();
+      }
+      g.drawImage(top, 0, 0, c.W, c.H);
+      return p.inside || Math.abs(amt) > 0.01 || Math.abs(v) > 0.01;
+    },
+  };
+}
+
+function springSagFx(c) {
+  let st = [];
+  return {
+    init() {
+      st = c.layers.map((L) => ({ x: L.cx, y: L.cy, vx: 0, vy: 0, r: Math.max(L.w, L.h) * 0.38 }));
+    },
+    step(f) {
+      const p = c.ptr, S = c.cfg.strength, g = c.ctx;
+      const spring = Math.max(0.012, c.cfg.spring ?? 0.022);
+      const grav = (c.cfg.gravity ?? 0.16) * S;
+      const damp = Math.pow(c.cfg.damping ?? 0.9, f);
+      let any = p.inside;
+      for (const s of st) {
+        s.vy += grav * f;
+        if (p.inside) {
+          const dx = s.x - p.x, dy = s.y - p.y, d2 = dx * dx + dy * dy + 80;
+          const push = (1400 * S) / d2;
+          s.vx += (dx / Math.sqrt(d2)) * push * f;
+          s.vy += (dy / Math.sqrt(d2)) * push * f;
+        }
+      }
+      c.layers.forEach((L, i) => {
+        const s = st[i];
+        s.vx += (L.cx - s.x) * spring * f;
+        s.vy += (L.cy - s.y) * spring * f;
+        s.vx *= damp; s.vy *= damp;
+        s.x += s.vx * f; s.y += s.vy * f;
+      });
+      for (let i = 0; i < st.length; i++) for (let j = i + 1; j < st.length; j++) {
+        const a = st[i], b = st[j];
+        const dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || 0.01;
+        const min = (a.r + b.r) * 0.55;
+        if (d >= min) continue;
+        const nx = dx / d, ny = dy / d, ov = (min - d) * 0.5;
+        a.x += nx * ov; a.y += ny * ov; b.x -= nx * ov; b.y -= ny * ov;
+        const rvx = a.vx - b.vx, rvy = a.vy - b.vy, vn = rvx * nx + rvy * ny;
+        if (vn > 0) continue;
+        const jn = vn * 0.7;
+        a.vx -= jn * nx; a.vy -= jn * ny; b.vx += jn * nx; b.vy += jn * ny;
+      }
+      c.clear();
+      c.layers.forEach((L, i) => {
+        const s = st[i];
+        const e = Math.abs(s.x - L.cx) + Math.abs(s.y - L.cy) + Math.abs(s.vx) + Math.abs(s.vy);
+        if (e > 0.2) any = true;
+        g.drawImage(L.c, s.x - L.w / 2, s.y - L.h / 2, L.w, L.h);
+      });
+      if (!any) c.layers.forEach((L) => g.drawImage(L.c, L.x, L.y, L.w, L.h));
+      return any;
+    },
+  };
+}
+
+function splitFlapFx(c) {
+  let root, cells = [];
+  const ready = () => typeof gsap !== "undefined";
+  return {
+    init() {
+      if (!ready()) return;
+      root = mountGsapRoot(c);
+      cells = c.layers.map((L) => {
+        const cell = document.createElement("div");
+        cell.className = "flap";
+        cell.style.left = L.x + "px"; cell.style.top = L.y + "px";
+        cell.style.width = L.w + "px"; cell.style.height = L.h + "px";
+        cell.style.perspective = "3em";
+        const mk = (cls, top) => {
+          const half = document.createElement("div");
+          half.className = "half " + cls;
+          half.style.top = top ? "0" : "50%";
+          half.style.height = "50%";
+          half.style.transformOrigin = top ? "50% 100%" : "50% 0%";
+          const cv = layerCanvas(L);
+          cv.style.left = "0"; cv.style.top = top ? "0" : "-50%";
+          cv.style.position = "absolute";
+          half.appendChild(cv);
+          return half;
+        };
+        const top = mk("top", true), bot = mk("bot", false);
+        const shade = document.createElement("div"); shade.className = "shade";
+        const line = document.createElement("div");
+        line.style.cssText = "position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(34,49,78,0.35)";
+        cell.append(top, bot, shade, line);
+        root.appendChild(cell);
+        gsap.set([top, bot], { rotateX: 0 });
+        return { top, bot, shade, hot: false };
+      });
+    },
+    enter() {
+      if (!ready() || !cells.length) return;
+      const dur = Math.max(0.04, (c.cfg.duration ?? 0.16) * 0.28);
+      cells.forEach((n, i) => {
+        gsap.timeline({ overwrite: true, delay: i * (c.cfg.stagger ?? 0.012) })
+          .to(n.top, { rotateX: -86, duration: dur, ease: "power1.in" }, 0)
+          .to(n.bot, { rotateX: 86, duration: dur, ease: "power1.in" }, 0)
+          .to(n.shade, { opacity: 0.6, duration: dur, ease: "power1.in" }, 0)
+          .to(n.top, { rotateX: 0, duration: dur, ease: "power1.out" })
+          .to(n.bot, { rotateX: 0, duration: dur, ease: "power1.out" }, "<")
+          .to(n.shade, { opacity: 0, duration: dur, ease: "power1.out" }, "<");
+      });
+    },
+    leave() {
+      if (!ready() || !cells.length) return;
+      const dur = Math.max(0.04, (c.cfg.duration ?? 0.16) * 0.28);
+      cells.forEach((n) => {
+        gsap.timeline({ overwrite: true })
+          .to(n.top, { rotateX: -86, duration: dur, ease: "power1.in" }, 0)
+          .to(n.bot, { rotateX: 86, duration: dur, ease: "power1.in" }, 0)
+          .to(n.shade, { opacity: 0.6, duration: dur }, 0)
+          .to(n.top, { rotateX: 0, duration: dur, ease: "power1.out" })
+          .to(n.bot, { rotateX: 0, duration: dur, ease: "power1.out" }, "<")
+          .to(n.shade, { opacity: 0, duration: dur }, "<");
+      });
+    },
+    step() {
+      if (!ready()) {
+        c.clear();
+        if (c.layers) c.ctx.drawImage(c.composite(), 0, 0, c.W, c.H);
+        return false;
+      }
+      return c.ptr.inside || cells.some((n) => gsap.isTweening(n.top) || gsap.isTweening(n.bot));
+    },
+  };
+}
+
+function faceRollFx(c) {
+  let root, rolls = [];
+  const ready = () => typeof gsap !== "undefined";
+  return {
+    init() {
+      if (!ready()) return;
+      root = mountGsapRoot(c);
+      rolls = groupLines(c.layers).map((line) => {
+        const xs = line.map((q) => q.L.x), ys = line.map((q) => q.L.y);
+        const x = Math.min(...xs), y = Math.min(...ys);
+        const w = Math.max(...line.map((q) => q.L.x + q.L.w)) - x;
+        const h = Math.max(...line.map((q) => q.L.h));
+        const box = document.createElement("div");
+        box.className = "roll";
+        box.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;perspective:600px;transform-origin:50% 0`;
+        const face = (color) => {
+          const f = document.createElement("div");
+          f.style.cssText = "position:absolute;inset:0;transform-style:preserve-3d;backface-visibility:hidden";
+          line.forEach((q) => {
+            const el = layerCanvas(q.L);
+            el.style.left = (q.L.x - x) + "px"; el.style.top = (q.L.y - y) + "px";
+            if (color) {
+              const g = el.getContext("2d");
+              g.globalCompositeOperation = "source-in";
+              g.fillStyle = color; g.fillRect(0, 0, el.width, el.height);
+            }
+            f.appendChild(el);
+          });
+          return f;
+        };
+        const front = face(null), back = face("#e4ff8c");
+        gsap.set(front, { rotateX: 0, transformOrigin: "50% 0" });
+        gsap.set(back, { rotateX: -90, transformOrigin: "50% 0" });
+        box.append(front, back);
+        root.appendChild(box);
+        return { box, front, back };
+      });
+    },
+    enter() {
+      if (!ready()) return;
+      const dur = c.cfg.duration ?? 0.55;
+      rolls.forEach((r, i) => {
+        gsap.to(r.front, { rotateX: 90, duration: dur, delay: i * 0.04, ease: "power3.inOut", overwrite: true });
+        gsap.to(r.back, { rotateX: 0, duration: dur, delay: i * 0.04, ease: "power3.inOut", overwrite: true });
+      });
+    },
+    leave() {
+      if (!ready()) return;
+      const dur = c.cfg.duration ?? 0.55;
+      rolls.forEach((r) => {
+        gsap.to(r.front, { rotateX: 0, duration: dur, ease: "power3.inOut", overwrite: true });
+        gsap.to(r.back, { rotateX: -90, duration: dur, ease: "power3.inOut", overwrite: true });
+      });
+    },
+    step() {
+      if (!ready()) {
+        c.clear();
+        if (c.layers) c.ctx.drawImage(c.composite(), 0, 0, c.W, c.H);
+        return false;
+      }
+      return c.ptr.inside || rolls.some((r) => gsap.isTweening(r.front));
+    },
+  };
+}
+
+function scribbleFx(c) {
+  let root, paths = [];
+  const ready = () => typeof gsap !== "undefined";
+  return {
+    init() {
+      if (!ready()) return;
+      root = mountGsapRoot(c);
+      c.layers.forEach((L) => root.appendChild(layerCanvas(L)));
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "scribble");
+      svg.setAttribute("width", String(c.W));
+      svg.setAttribute("height", String(c.H));
+      svg.style.position = "absolute";
+      svg.style.inset = "0";
+      paths = groupLines(c.layers).map((line) => {
+        const x0 = Math.min(...line.map((q) => q.L.x)) - 4;
+        const x1 = Math.max(...line.map((q) => q.L.x + q.L.w)) + 4;
+        const y = Math.max(...line.map((q) => q.L.y + q.L.h)) - 3;
+        let d = `M ${x0} ${y}`;
+        const steps = 10, span = x1 - x0;
+        for (let i = 1; i <= steps; i++) {
+          const x = x0 + (span * i) / steps;
+          const wob = (i % 2 ? 3 : -2.5) + (rnd() - 0.5) * 1.4;
+          d += ` Q ${x - span / steps / 2} ${y + wob} ${x} ${y + (rnd() - 0.5)}`;
+        }
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", d);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", INK);
+        path.setAttribute("stroke-width", "2.2");
+        path.setAttribute("stroke-linecap", "round");
+        svg.appendChild(path);
+        const len = path.getTotalLength();
+        path.style.strokeDasharray = String(len);
+        path.style.strokeDashoffset = String(len);
+        return { path, len };
+      });
+      root.appendChild(svg);
+    },
+    enter() {
+      if (!ready()) return;
+      paths.forEach((p, i) => {
+        gsap.to(p.path, { strokeDashoffset: 0, duration: c.cfg.duration ?? 0.5, delay: i * 0.06, ease: "power2.out", overwrite: true });
+      });
+    },
+    leave() {
+      if (!ready()) return;
+      paths.forEach((p) => {
+        gsap.to(p.path, { strokeDashoffset: p.len, duration: c.cfg.duration ?? 0.5, ease: "power2.in", overwrite: true });
+      });
+    },
+    step() {
+      if (!ready()) {
+        c.clear();
+        if (c.layers) c.ctx.drawImage(c.composite(), 0, 0, c.W, c.H);
+        return false;
+      }
+      return c.ptr.inside || paths.some((p) => gsap.isTweening(p.path));
+    },
+  };
+}
+
+function circularTypeFx(c) {
+  let root, nodes = [];
+  const ready = () => typeof gsap !== "undefined";
+  return {
+    init() {
+      if (!ready()) return;
+      root = mountGsapRoot(c);
+      nodes = c.layers.map((L) => {
+        const el = layerCanvas(L);
+        root.appendChild(el);
+        gsap.set(el, { x: 0, y: 0, rotation: 0, transformOrigin: "50% 50%" });
+        return { el, L };
+      });
+    },
+    enter() {
+      if (!ready()) return;
+      const n = nodes.length || 1, rr = Math.min(c.W, c.H) * 0.34 * c.cfg.strength;
+      nodes.forEach((q, i) => {
+        const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+        gsap.to(q.el, {
+          x: c.W / 2 + Math.cos(a) * rr - q.L.cx,
+          y: c.H / 2 + Math.sin(a) * rr - q.L.cy,
+          rotation: (a * 180) / Math.PI + 90,
+          duration: c.cfg.duration ?? 0.7,
+          ease: "power3.inOut",
+          overwrite: true,
+        });
+      });
+    },
+    leave() {
+      if (!ready()) return;
+      gsap.to(nodes.map((n) => n.el), { x: 0, y: 0, rotation: 0, duration: c.cfg.duration ?? 0.7, ease: "power3.inOut", overwrite: true });
+    },
+    step() {
+      if (!ready()) {
+        c.clear();
+        if (c.layers) c.ctx.drawImage(c.composite(), 0, 0, c.W, c.H);
+        return false;
+      }
+      return c.ptr.inside || nodes.some((n) => gsap.isTweening(n.el));
+    },
+  };
+}
+
+function marqueeFx(c) {
+  let root, lines = [];
+  const ready = () => typeof gsap !== "undefined";
+  return {
+    init() {
+      if (!ready()) return;
+      root = mountGsapRoot(c);
+      lines = groupLines(c.layers).map((line) => {
+        const x = Math.min(...line.map((q) => q.L.x));
+        const y = Math.min(...line.map((q) => q.L.y));
+        const w = Math.max(...line.map((q) => q.L.x + q.L.w)) - x;
+        const h = Math.max(...line.map((q) => q.L.h));
+        const clip = document.createElement("div");
+        clip.className = "wrap";
+        clip.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+        const strip = document.createElement("div");
+        strip.style.cssText = "position:absolute;left:0;top:0;height:100%;display:flex;gap:0;white-space:nowrap";
+        const pack = () => {
+          const g = document.createElement("div");
+          g.style.cssText = `position:relative;width:${w}px;height:${h}px;flex:none`;
+          line.forEach((q) => {
+            const el = layerCanvas(q.L);
+            el.style.left = (q.L.x - x) + "px"; el.style.top = (q.L.y - y) + "px";
+            g.appendChild(el);
+          });
+          return g;
+        };
+        strip.append(pack(), pack());
+        clip.appendChild(strip);
+        root.appendChild(clip);
+        gsap.set(strip, { x: 0 });
+        return { strip, w };
+      });
+    },
+    enter() {
+      if (!ready()) return;
+      lines.forEach((ln) => {
+        gsap.to(ln.strip, { x: -ln.w, duration: Math.max(0.6, (c.cfg.duration ?? 0.9) * 1.4), ease: "none", repeat: -1, overwrite: true });
+      });
+    },
+    leave() {
+      if (!ready()) return;
+      lines.forEach((ln) => gsap.to(ln.strip, { x: 0, duration: c.cfg.duration ?? 0.5, ease: "power2.out", overwrite: true }));
+    },
+    step() {
+      if (!ready()) {
+        c.clear();
+        if (c.layers) c.ctx.drawImage(c.composite(), 0, 0, c.W, c.H);
+        return false;
+      }
+      return c.ptr.inside || lines.some((ln) => gsap.isTweening(ln.strip));
+    },
+  };
+}
+
+function crackFx(c) {
+  let root, a, b;
+  const ready = () => typeof gsap !== "undefined";
+  return {
+    init() {
+      if (!ready()) return;
+      root = mountGsapRoot(c);
+      const mk = (poly, color) => {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = `position:absolute;inset:0;clip-path:${poly}`;
+        const el = layerCanvas({ c: c.composite(), x: 0, y: 0, w: c.W, h: c.H });
+        el.style.left = "0"; el.style.top = "0"; el.style.width = c.W + "px"; el.style.height = c.H + "px";
+        if (color) {
+          const g = el.getContext("2d");
+          g.globalCompositeOperation = "source-atop";
+          g.fillStyle = color; g.globalAlpha = 0.55; g.fillRect(0, 0, el.width, el.height);
+        }
+        wrap.appendChild(el);
+        root.appendChild(wrap);
+        return wrap;
+      };
+      a = mk("polygon(0 0, 100% 0, 100% 100%)", "#e4ff8c");
+      b = mk("polygon(0 0, 0 100%, 100% 100%)", INK);
+      gsap.set(a, { x: 0, y: 0 });
+      gsap.set(b, { x: 0, y: 0 });
+    },
+    enter() {
+      if (!ready()) return;
+      const s = 4 * c.cfg.strength;
+      gsap.to(a, { x: s, y: -s * 0.25, duration: c.cfg.duration ?? 0.4, ease: "power2.out", overwrite: true });
+      gsap.to(b, { x: -s, y: s * 0.25, duration: c.cfg.duration ?? 0.4, ease: "power2.out", overwrite: true });
+    },
+    leave() {
+      if (!ready()) return;
+      gsap.to([a, b], { x: 0, y: 0, duration: c.cfg.duration ?? 0.4, ease: "power2.inOut", overwrite: true });
+    },
+    step() {
+      if (!ready()) {
+        c.clear();
+        if (c.layers) c.ctx.drawImage(c.composite(), 0, 0, c.W, c.H);
+        return false;
+      }
+      return c.ptr.inside || gsap.isTweening(a) || gsap.isTweening(b);
+    },
+  };
+}
+
+function wipeFx(c) {
+  let root, nodes = [];
+  const ready = () => typeof gsap !== "undefined";
+  return {
+    init() {
+      if (!ready()) return;
+      root = mountGsapRoot(c);
+      nodes = c.layers.map((L) => {
+        const wrap = document.createElement("div");
+        wrap.className = "wrap";
+        wrap.style.cssText = `left:${L.x}px;top:${L.y}px;width:${L.w}px;height:${L.h}px`;
+        const el = layerCanvas(L);
+        el.style.left = "0"; el.style.top = "0";
+        wrap.appendChild(el);
+        root.appendChild(wrap);
+        gsap.set(el, { y: 0, opacity: 1 });
+        return { el, wrap, L };
+      });
+    },
+    enter() {
+      if (!ready()) return;
+      const dur = c.cfg.duration ?? 0.45, st = c.cfg.stagger ?? 0.02;
+      nodes.forEach((n, i) => {
+        gsap.timeline({ overwrite: true, delay: i * st })
+          .to(n.el, { y: -n.L.h, duration: dur * 0.45, ease: "power3.in" })
+          .fromTo(n.el, { y: n.L.h }, { y: 0, duration: dur * 0.55, ease: "power3.out" });
+      });
+    },
+    leave() {
+      if (!ready()) return;
+      nodes.forEach((n) => gsap.to(n.el, { y: 0, duration: 0.2, overwrite: true }));
+    },
+    step() {
+      if (!ready()) {
+        c.clear();
+        if (c.layers) c.ctx.drawImage(c.composite(), 0, 0, c.W, c.H);
+        return false;
+      }
+      return c.ptr.inside || nodes.some((n) => gsap.isTweening(n.el));
+    },
+  };
+}
+
+function cornerFlapFx(c) {
+  let root, cards = [];
+  const ready = () => typeof gsap !== "undefined";
+  return {
+    init() {
+      if (!ready()) return;
+      root = mountGsapRoot(c);
+      cards = c.layers.map((L) => {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = `position:absolute;left:${L.x}px;top:${L.y}px;width:${L.w}px;height:${L.h}px`;
+        const base = layerCanvas(L);
+        base.style.left = "0"; base.style.top = "0";
+        const flap = layerCanvas(L);
+        flap.style.left = "0"; flap.style.top = "0";
+        flap.style.transformOrigin = "100% 0";
+        const back = layerCanvas(L);
+        back.style.left = "0"; back.style.top = "0";
+        back.style.transformOrigin = "100% 0";
+        const bg = back.getContext("2d");
+        bg.globalCompositeOperation = "source-in";
+        bg.fillStyle = "#4a5a78";
+        bg.fillRect(0, 0, back.width, back.height);
+        wrap.append(base, back, flap);
+        root.appendChild(wrap);
+        gsap.set(flap, { rotation: 0, scaleX: 1 });
+        gsap.set(back, { rotation: 0, scaleX: -1, opacity: 0 });
+        return { L, flap, back, hot: false };
+      });
+    },
+    step() {
+      if (!ready() || !cards.length) {
+        c.clear();
+        if (c.layers) c.ctx.drawImage(c.composite(), 0, 0, c.W, c.H);
+        return false;
+      }
+      const p = c.ptr, R = c.cfg.radius, S = c.cfg.strength, dur = c.cfg.duration ?? 0.45;
+      cards.forEach((n) => {
+        const cornerX = n.L.x + n.L.w, cornerY = n.L.y;
+        const l = p.inside ? lin(Math.hypot(p.x - cornerX, p.y - cornerY), R * 1.1) : 0;
+        const want = l > 0.08;
+        if (want === n.hot && want) {
+          const peel = 18 * S * Math.max(l, 0.4);
+          gsap.to(n.flap, { rotation: -peel, duration: 0.18, ease: "power2.out", overwrite: true });
+          gsap.to(n.back, { rotation: peel, opacity: 0.85 * l, duration: 0.18, ease: "power2.out", overwrite: true });
+          n.flap.style.filter = `drop-shadow(-4px 6px 8px rgba(34,49,78,${0.28 * l}))`;
+          return;
+        }
+        if (want === n.hot) return;
+        n.hot = want;
+        gsap.to(n.flap, { rotation: want ? -16 * S : 0, duration: dur, ease: want ? "power2.out" : "power2.inOut", overwrite: true });
+        gsap.to(n.back, { rotation: want ? 16 * S : 0, opacity: want ? 0.8 : 0, duration: dur, overwrite: true });
+        n.flap.style.filter = want ? "drop-shadow(-4px 6px 8px rgba(34,49,78,0.28))" : "none";
+      });
+      return p.inside || cards.some((n) => gsap.isTweening(n.flap));
     },
   };
 }
@@ -1816,6 +3048,84 @@ const EFFECTS = [
     family: "gsap", tags: [["GSAP", "gsap"], ["Text: great", "good"], ["Light", "good"]], make: (c) => gsapFx(c, "cascade") },
   { name: "GSAP smear", blurb: "Velocity skews the pieces, like a fast pan. GSAP quickTo keeps it buttery.",
     family: "gsap", tags: [["GSAP", "gsap"], ["Text: great", "good"], ["Light", "good"]], make: (c) => gsapFx(c, "smear") },
+  { name: "Rim glass", blurb: "A small droplet. The sample bends at the rim and the center stays on the true artwork.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Medium CPU", "warn"]], make: glassFx },
+  { name: "Chromatic rim", blurb: "Red, green and blue separate along the radius and lock together at the center. No row ever moves.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Medium CPU", "warn"]],
+    guard: "A full-frame channel shift, with no clean center, reads as Glitch.",
+    make: chromaRimFx },
+  { name: "Bayer dither", blurb: "A fixed threshold matrix inside the radius. Strength is how many grey levels stay.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Medium CPU", "warn"]], make: bayerFx },
+  { name: "Smudge", blurb: "Pixels copy along the stroke, then a clean buffer fades back when you leave.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Light-medium", "good"]], make: smudgeFx },
+  { name: "Cross-stitch", blurb: "Opaque cells sew in as two crossing stitches, not dots or ASCII.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Light", "good"]], make: stitchFx },
+  { name: "Ink smoke", blurb: "Soft puffs rise off the ink. The bitmap itself never moves.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Light", "good"]], make: smokeFx },
+  { name: "Slat blinds", blurb: "Each strip squashes toward its own center line. scaleY stops short of zero so a word stays.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Light", "good"]],
+    guard: "Rotating the strips in 3D rebuilds 3D flip. scaleY at 0 hides the word.",
+    make: slatFx },
+  { name: "Pixel sort", blurb: "A short band reorders by brightness and stops at transparent gaps, so a stem does not paint across a counter.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Medium CPU", "warn"]], make: pixelSortFx },
+  { name: "Pencil sketch", blurb: "Grayscale, invert, blur, color-dodge inside the radius. Graphite, not ASCII or a duotone reprint.",
+    for: "headline", tags: [["Canvas", "good"], ["Headline only", "warn"], ["Medium CPU", "warn"]],
+    guard: "A flat two-color logo has no internal edges and goes blank.",
+    make: sketchFx },
+  { name: "Voronoi mosaic", blurb: "Nearest-seed cells with a lead line. Not axis-aligned blocks, and nothing spins away.",
+    for: "logo", tags: [["Canvas", "good"], ["Logo only", "warn"], ["Medium CPU", "warn"]], make: voronoiFx },
+  { name: "Metaball goop", blurb: "Blobs fuse where a scalar field passes 1, then separate home.",
+    for: "logo", tags: [["Canvas", "good"], ["Logo only", "warn"], ["Medium CPU", "warn"]], make: metaballFx },
+  { name: "Traveling sheen", blurb: "One translucent band at about 45° crosses the mark once, clipped to its alpha.",
+    for: "logo", tags: [["Canvas", "good"], ["Logo only", "warn"], ["Light", "good"]], make: sheenFx },
+  { name: "X-ray hole", blurb: "A hole deletes the top pixels and shows a second layer underneath. Not a recolor of the same pixels.",
+    tags: [["Canvas", "good"], ["Both", "good"], ["Light", "good"]],
+    guard: "If the revealed art is the same pixels recolored, it is Spotlight.",
+    make: xrayFx },
+  { name: "Spring sag", blurb: "Gravity, a pointer push and a spring. Letters stay a word and never land on a floor.",
+    for: "headline", tags: [["Canvas", "good"], ["Headline only", "warn"], ["Light", "good"]],
+    guard: "A weak spring lets letters hit the floor, and the card becomes Drop.",
+    make: springSagFx },
+  { name: "Overshoot follow", blurb: "Pieces chase a small offset toward the pointer and pass that target before settling. Scale stays home. No ghosts.",
+    family: "gsap", tags: [["GSAP", "gsap"], ["Both", "good"], ["Light", "good"]],
+    guard: "Ghost copies behind the pieces rebuild Echo.",
+    make: (c) => gsapFx(c, "overshoot") },
+  { name: "Lagged swing", blurb: "x, y and in-plane rotation lag the pointer, and brightness rises. Then all four return.",
+    family: "gsap", tags: [["GSAP", "gsap"], ["Both", "good"], ["Light", "good"]],
+    guard: "rotationX and rotationY become 3D flip. skewX from velocity becomes smear.",
+    make: (c) => gsapFx(c, "swing") },
+  { name: "Distance color", blurb: "Each piece interpolates a flat fill by distance inside the radius. Past the radius it is the base color again.",
+    family: "gsap", tags: [["GSAP", "gsap"], ["Both", "good"], ["Light", "good"]],
+    make: (c) => gsapFx(c, "color") },
+  { name: "Split-flap hinge", blurb: "The letter hinges on its own midline, same character both sides, with a shade when the flap is edge-on.",
+    family: "gsap", for: "headline", tags: [["GSAP", "gsap"], ["Headline only", "warn"], ["Light", "good"]],
+    guard: "Rolling through a charset rebuilds scramble.",
+    make: splitFlapFx },
+  { name: "Baseline tracking", blurb: "Letters move apart on the line and stay the same height. No rotation, no throw.",
+    family: "gsap", for: "headline", tags: [["GSAP", "gsap"], ["Headline only", "warn"], ["Light", "good"]],
+    make: (c) => gsapFx(c, "tracking") },
+  { name: "Second-face roll", blurb: "The word rolls back on its top edge and a second copy, waiting underneath, comes up in lime.",
+    family: "gsap", for: "headline", tags: [["GSAP", "gsap"], ["Headline only", "warn"], ["Light", "good"]],
+    make: faceRollFx },
+  { name: "Scribble underline", blurb: "One hand-drawn stroke draws on enter and undraws on leave. It sits under the word, not on the glyph.",
+    family: "gsap", for: "headline", tags: [["GSAP", "gsap"], ["Headline only", "warn"], ["Light", "good"]],
+    make: scribbleFx },
+  { name: "Circular type", blurb: "Whole letters move from the baseline onto a circle, rotate to the tangent, then return.",
+    family: "gsap", for: "headline", tags: [["GSAP", "gsap"], ["Headline only", "warn"], ["Light", "good"]],
+    make: circularTypeFx },
+  { name: "Clipped marquee", blurb: "A repeated copy of the word scrolls inside a window the width of the word, then settles to one copy.",
+    family: "gsap", for: "headline", tags: [["GSAP", "gsap"], ["Headline only", "warn"], ["Light", "good"]],
+    make: marqueeFx },
+  { name: "Diagonal crack", blurb: "The word is cut once, corner to corner. The two pieces nudge apart and recolor.",
+    family: "gsap", for: "headline", tags: [["GSAP", "gsap"], ["Headline only", "warn"], ["Light", "good"]],
+    make: crackFx },
+  { name: "Masked letter wipe", blurb: "Each letter slides through an overflow clip. Cascade uses the same direction with no clip, so type never hides.",
+    family: "gsap", for: "headline", tags: [["GSAP", "gsap"], ["Headline only", "warn"], ["Light", "good"]],
+    make: wipeFx },
+  { name: "Corner flap", blurb: "A corner lifts, a shadow sits in the crease, the underside is a mirrored copy. Not a WebGL cylinder.",
+    family: "gsap", for: "logo", tags: [["GSAP", "gsap"], ["Logo only", "warn"], ["Light", "good"]],
+    guard: "The cylindrical peel is WebGL. The card is a GSAP corner with a mirrored underside.",
+    make: cornerFlapFx },
 ];
 const EXTRA = {
   "Pixel burst": [K.spring, K.damping, K.blast],
@@ -1860,6 +3170,32 @@ const EXTRA = {
   "GSAP orbit": [K.duration],
   "GSAP cascade": [K.duration, K.stagger],
   "GSAP smear": [K.duration],
+  "Rim glass": [K.bend],
+  "Chromatic rim": [K.offset],
+  "Bayer dither": [K.levels],
+  Smudge: [K.fade],
+  "Cross-stitch": [K.cell],
+  "Ink smoke": [K.puff],
+  "Slat blinds": [K.close],
+  "Pixel sort": [K.window],
+  "Pencil sketch": [K.blur],
+  "Voronoi mosaic": [K.seeds],
+  "Metaball goop": [K.swell],
+  "Traveling sheen": [K.speed],
+  "X-ray hole": [],
+  "Spring sag": [K.spring, K.gravity, K.damping],
+  "Overshoot follow": [K.pull, K.duration],
+  "Lagged swing": [K.duration],
+  "Distance color": [K.duration],
+  "Split-flap hinge": [K.duration, K.stagger],
+  "Baseline tracking": [K.gap, K.duration],
+  "Second-face roll": [K.duration],
+  "Scribble underline": [K.duration],
+  "Circular type": [K.duration],
+  "Clipped marquee": [K.duration],
+  "Diagonal crack": [K.duration],
+  "Masked letter wipe": [K.duration, K.stagger],
+  "Corner flap": [K.duration],
 };
 EFFECTS.forEach((d) => { d.knobs = RS.concat(EXTRA[d.name] || []); });
 
