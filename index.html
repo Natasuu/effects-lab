@@ -1500,7 +1500,7 @@ function gsapFx(c, mode) {
           x: 0, y: 0, rotation: 0, rotationX: 0, rotationY: 0, scale: 1,
           skewX: 0, skewY: 0, opacity: 1, transformPerspective: 800, transformOrigin: "50% 50%",
         });
-        return { el, L };
+        return { el, L, hot: false };
       });
       const dur = 0.42;
       q = nodes.map((n) => ({
@@ -1572,6 +1572,11 @@ function gsapFx(c, mode) {
     },
     leave() {
       if (!ready() || !nodes) return;
+      if (mode === "elastic") {
+        nodes.forEach((n) => { n.hot = false; });
+        home("elastic.out(1, 0.5)");
+        return;
+      }
       if (mode === "explode" || mode === "cascade" || mode === "swap" || mode === "scramble" || mode === "wiggle" || mode === "inertia") {
         home(mode === "cascade" ? "bounce.out" : "elastic.out(1, 0.55)");
       }
@@ -1583,12 +1588,29 @@ function gsapFx(c, mode) {
         return false;
       }
       const p = c.ptr, R = c.cfg.radius, S = c.cfg.strength;
-      if (p.inside && (mode === "elastic" || mode === "flip3d" || mode === "orbit" || mode === "smear")) {
+      if (mode === "elastic") {
+        const amt = (c.cfg.scale ?? 0.2) * 2.75 * S;
+        const dur = c.cfg.duration ?? 0.7;
+        if (p.inside) {
+          nodes.forEach((n) => {
+            const l = lin(dist(n), R);
+            const want = l > 0.05;
+            if (want === n.hot) return;
+            n.hot = want;
+            gsap.to(n.el, {
+              scale: want ? 1 + amt * Math.max(l, 0.55) : 1,
+              duration: dur,
+              ease: "elastic.out(1, 0.42)",
+              overwrite: true,
+            });
+          });
+        }
+        return p.inside || nodes.some((n) => gsap.isTweening(n.el));
+      }
+      if (p.inside && (mode === "flip3d" || mode === "orbit" || mode === "smear")) {
         nodes.forEach((n, i) => {
           const l = lin(dist(n), R);
-          if (mode === "elastic") {
-            q[i].s(1 + 0.55 * S * l);
-          } else if (mode === "flip3d") {
+          if (mode === "flip3d") {
             q[i].ry(clamp((p.x - n.L.cx) / (R * 0.8), -1, 1) * 48 * S * l);
             q[i].rx(clamp((n.L.cy - p.y) / (R * 0.8), -1, 1) * 36 * S * l);
             q[i].s(1 + 0.12 * S * l);
@@ -1604,7 +1626,7 @@ function gsapFx(c, mode) {
           }
         });
       }
-      if (!p.inside && (mode === "elastic" || mode === "flip3d" || mode === "orbit" || mode === "smear")) {
+      if (!p.inside && (mode === "flip3d" || mode === "orbit" || mode === "smear")) {
         nodes.forEach((n, i) => { q[i].x(0); q[i].y(0); q[i].s(1); q[i].r(0); q[i].rx(0); q[i].ry(0); q[i].kx(0); });
       }
       return p.inside || nodes.some((n) => gsap.isTweening(n.el));
