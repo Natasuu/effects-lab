@@ -23,16 +23,32 @@
   }
   .bar {
     position: sticky; top: 0; z-index: 10;
-    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px;
-    padding: 14px 32px;
     background: rgba(221, 225, 237, 0.82);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--line);
   }
-  .bar h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; margin-right: auto; }
+  .bar-top {
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    padding: 14px 32px;
+  }
+  .bar h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
   .bar h1 small { display: block; font: 400 12px/1.3 var(--mono); opacity: .6; letter-spacing: 0; margin-top: 2px; }
+  .filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 16px 24px; flex: none; }
+  .bar-set {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto auto auto;
+    align-items: center;
+    gap: 16px 36px;
+    padding: 14px 32px 16px;
+    border-top: 1px solid var(--line);
+  }
   .ctl { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); text-transform: uppercase; letter-spacing: .02em; }
-  .ctl input[type=range] { width: 120px; accent-color: var(--fg); }
+  .ctl.slide { display: grid; grid-template-columns: auto 1fr 3ch; gap: 12px; align-items: center; min-width: 0; }
+  .ctl input[type=range] { width: 100%; min-width: 0; accent-color: var(--fg); }
+  .num {
+    display: inline-block; min-width: 3ch; font-variant-numeric: tabular-nums;
+    text-align: right; white-space: pre;
+  }
   .seg { display: inline-flex; border: 1px solid var(--fg); border-radius: 4px; overflow: hidden; }
   .seg button {
     font: 12px var(--mono); text-transform: uppercase; letter-spacing: .02em;
@@ -42,6 +58,11 @@
   label.chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
   .picks { font: 12px var(--mono); padding: 7px 12px; background: var(--accent); border-radius: 4px; }
   .picks:empty { display: none; }
+  @media (max-width: 860px) {
+    .bar-top { flex-wrap: wrap; }
+    .filters { justify-content: flex-start; }
+    .bar-set { grid-template-columns: 1fr 1fr; }
+  }
 
   .grid {
     display: grid; gap: 20px; padding: 24px 32px 64px;
@@ -95,31 +116,37 @@
 </head>
 <body>
 <div class="bar">
-  <h1>Hover effects lab<small>Move your cursor over each card, or turn on Auto cursor.</small></h1>
-  <div class="ctl">Subject
-    <div class="seg" id="subject">
-      <button data-v="logos" aria-pressed="true">Logos</button>
-      <button data-v="headline" aria-pressed="false">Headline</button>
+  <div class="bar-top">
+    <h1>Hover effects lab<small>Move your cursor over each card, or turn on Auto cursor.</small></h1>
+    <div class="filters">
+      <div class="ctl">Subject
+        <div class="seg" id="subject">
+          <button data-v="logos" aria-pressed="true">Logos</button>
+          <button data-v="headline" aria-pressed="false">Headline</button>
+        </div>
+      </div>
+      <div class="ctl">Family
+        <div class="seg" id="family">
+          <button data-v="all" aria-pressed="true">All</button>
+          <button data-v="canvas" aria-pressed="false">Canvas</button>
+          <button data-v="gsap" aria-pressed="false">GSAP</button>
+        </div>
+      </div>
+      <div class="ctl">Cards
+        <div class="seg" id="density">
+          <button data-v="520" aria-pressed="true">Big</button>
+          <button data-v="360" aria-pressed="false">Compact</button>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="ctl">Family
-    <div class="seg" id="family">
-      <button data-v="all" aria-pressed="true">All</button>
-      <button data-v="canvas" aria-pressed="false">Canvas</button>
-      <button data-v="gsap" aria-pressed="false">GSAP</button>
-    </div>
+  <div class="bar-set">
+    <div class="ctl slide">All radius <input id="radius" type="range" min="40" max="260" value="130"><span id="radiusV" class="num">130</span></div>
+    <div class="ctl slide">All strength <input id="strength" type="range" min="30" max="200" value="100"><span id="strengthV" class="num">1.0</span></div>
+    <label class="ctl chk"><input id="auto" type="checkbox"> Auto cursor</label>
+    <label class="ctl chk"><input id="ring" type="checkbox" checked> Show radius</label>
+    <div class="picks" id="picks"></div>
   </div>
-  <div class="ctl">Cards
-    <div class="seg" id="density">
-      <button data-v="520" aria-pressed="true">Big</button>
-      <button data-v="360" aria-pressed="false">Compact</button>
-    </div>
-  </div>
-  <div class="ctl">All radius <input id="radius" type="range" min="40" max="260" value="130"><span id="radiusV">130</span></div>
-  <div class="ctl">All strength <input id="strength" type="range" min="30" max="200" value="100"><span id="strengthV">1.0</span></div>
-  <label class="ctl chk"><input id="auto" type="checkbox"> Auto cursor</label>
-  <label class="ctl chk"><input id="ring" type="checkbox" checked> Show radius</label>
-  <div class="picks" id="picks"></div>
 </div>
 <main class="grid" id="grid"></main>
 <footer>GSAP cards need a network connection the first time (the library loads from a CDN). Open Settings on a card to tune that effect alone. Star the ones you like and tell me which.</footer>
@@ -374,6 +401,7 @@ class Card {
     this._comp = null; this._compData = null;
     this.fx = this.def.make(this);
     this.fx.init();
+    this.ptr.wasInside = false;
     this.alive = false; this.dirty = true;
   }
 
@@ -1877,7 +1905,7 @@ document.querySelectorAll("#density button").forEach((b) => b.addEventListener("
 }));
 const bind = (id, fn) => document.getElementById(id).addEventListener("input", (e) => fn(e.target));
 bind("radius", (el) => {
-  document.getElementById("radiusV").textContent = el.value;
+  document.getElementById("radiusV").textContent = String(el.value).padStart(3, " ");
   cards.forEach((card) => card.setCfg({ radius: +el.value }));
 });
 bind("strength", (el) => {
