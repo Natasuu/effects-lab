@@ -163,6 +163,10 @@
     padding: 8px 10px; border-radius: 6px; font: 12px/1.45 var(--mono);
     box-shadow: 0 6px 18px rgba(34, 49, 78, .18);
   }
+  .fade-swap { transition: opacity .14s ease-out; }
+  .fade-swap.is-out { opacity: 0; }
+  .fade-swap.is-in { transition: opacity .22s ease-in; }
+  @media (prefers-reduced-motion: reduce) { .fade-swap, .fade-swap.is-in { transition: none; } }
   .card h2 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.02em; }
   .card header p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; opacity: .72; }
   .card header .warn {
@@ -614,6 +618,7 @@ class Card {
     this.stage.classList.remove("has-cursor", "has-halo");
     if (typeof gsap !== "undefined") gsap.killTweensOf(this.stage.querySelectorAll(".gsap-root *"));
     this.canvas.style.opacity = "";
+    this.stale = false;
     const r = this.stage.getBoundingClientRect();
     this.W = Math.round(r.width); this.H = Math.round(r.height);
     if (!this.W || !this.H || !logoImages.length) return;
@@ -4110,11 +4115,47 @@ EFFECTS.forEach((d) => { d.knobs = RS.concat(EXTRA[d.name] || []); });
 const grid = document.getElementById("grid");
 const cards = EFFECTS.map((d, i) => { const c = new Card(d, i); grid.appendChild(c.el); return c; });
 
-function rebuildAll() { cards.forEach((c) => c.rebuild()); }
+function fadeSwap(target, fn, out = 150, inn = 220) {
+  const els = Array.isArray(target) ? target : [target];
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { fn(); return; }
+  els.forEach((e) => { e.classList.remove("is-in"); e.classList.add("fade-swap", "is-out"); e.style.transitionDuration = out + "ms"; });
+  setTimeout(() => {
+    fn();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      els.forEach((e) => { e.style.transitionDuration = inn + "ms"; e.classList.add("is-in"); e.classList.remove("is-out"); });
+      setTimeout(() => els.forEach((e) => { e.classList.remove("fade-swap", "is-in"); e.style.transitionDuration = ""; }), inn + 40);
+    }));
+  }, out);
+}
+const pending = new Set();
+let pumping = false;
+const inView = (c) => { const r = c.el.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < innerHeight; };
+function pump() {
+  if (pumping) return;
+  pumping = true;
+  requestAnimationFrame(function step() {
+    let pick = null;
+    for (const c of pending) { if (c.visible) { pick = c; break; } }
+    if (!pick) pick = pending.values().next().value;
+    if (!pick) { pumping = false; return; }
+    pending.delete(pick);
+    if (pick.el.offsetParent !== null) pick.rebuild();
+    requestAnimationFrame(step);
+  });
+}
+function rebuildAll() {
+  let now = 0;
+  cards.forEach((c) => {
+    c.stale = true;
+    if (now < 7 && inView(c)) { now++; pending.delete(c); c.rebuild(); }
+    else pending.add(c);
+  });
+  pump();
+}
 
 const io = new IntersectionObserver((es) => es.forEach((e) => {
   const card = cards.find((c) => c.stage === e.target.querySelector(".stage"));
-  if (card) { card.visible = e.isIntersecting; if (e.isIntersecting) card.dirty = true; }
+  if (card) { card.visible = e.isIntersecting; if (e.isIntersecting) { card.dirty = true; if (card.stale) { pending.add(card); pump(); } } }
 }), { threshold: 0.01 });
 cards.forEach((c) => io.observe(c.el));
 
@@ -4217,13 +4258,15 @@ document.querySelectorAll("#subject button").forEach((b) => b.addEventListener("
   document.querySelectorAll("#subject button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
   const seg = b.closest(".seg");
   moveSegPill(seg, true);
-  afterPillPaint(seg, rebuildAll);
+  afterPillPaint(seg, () => fadeSwap(cards.map((c) => c.stage), rebuildAll, 30, 50));
 }));
 function applyFilter() {
   cards.forEach((c) => {
     const fam = c.def.family || "canvas";
     c.el.style.display = params.family === "all" || params.family === fam ? "" : "none";
   });
+  cards.forEach((c) => { if (c.stale && c.el.offsetParent !== null) pending.add(c); });
+  pump();
 }
 document.querySelectorAll("#family button").forEach((b) => b.addEventListener("click", () => {
   if (b.getAttribute("aria-pressed") === "true") return;
@@ -4239,8 +4282,10 @@ document.querySelectorAll("#density button").forEach((b) => b.addEventListener("
   const seg = b.closest(".seg");
   moveSegPill(seg, true);
   afterPillPaint(seg, () => {
-    grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${b.dataset.v}px, 1fr))`;
-    rebuildAll();
+    fadeSwap(grid, () => {
+      grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${b.dataset.v}px, 1fr))`;
+      rebuildAll();
+    });
   });
 }));
 const bind = (id, fn) => document.getElementById(id).addEventListener("input", (e) => fn(e.target));
